@@ -16,7 +16,8 @@ public sealed record SupportCharge(string Id, decimal Amount, string Status, str
 public sealed record SupportState(string Subscription, string Access, SupportCharge[] Charges);
 public sealed record SupportResolution(string Id, string CompanyId, string CaseId, SupportInstruction? Instruction,
     string Status, string Source, string Summary, string Reply, SupportAccess[] DataAccess,
-    SupportTimeline[] Timeline, SupportState State, string? DraftId, SupportVerification? Verification = null, string? ModelFailure = null);
+    SupportTimeline[] Timeline, SupportState State, string? DraftId, SupportVerification? Verification = null,
+    string? ModelFailure = null, string? ClarificationQuestion = null);
 
 public sealed class SupportException(int statusCode, string message) : Exception(message)
 {

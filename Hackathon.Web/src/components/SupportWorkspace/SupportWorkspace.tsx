@@ -89,9 +89,13 @@ function CaseWorkspace({ company, supportCase, instructions, tab, onInstruction 
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [clarificationOpen, setClarificationOpen] = useState(false)
+  const [clarificationAnswer, setClarificationAnswer] = useState('')
+  const [clarificationContext, setClarificationContext] = useState('')
   const requestRef = useRef<AbortController | null>(null)
   useEffect(() => () => requestRef.current?.abort(), [])
   const body = { companyId: company.id, caseId: supportCase.id, message: message.trim() }
+  const clarificationRemaining = Math.max(0, 4000 - clarificationContext.length - '\n\nУточнення користувача: '.length)
   const manualReview = result?.instruction?.action === 'manual_review'
   const canApproveAction = result?.status === 'needs_approval'
     && result.verification?.status === 'confirmed' && !manualReview
@@ -107,11 +111,37 @@ function CaseWorkspace({ company, supportCase, instructions, tab, onInstruction 
       if (!controller.signal.aborted) { requestRef.current = null; setBusy('') }
     }
   }
-  const resolve = () => run('Перевірка звернення…', async (signal) => {
-    setResult(null)
-    const response = await resolveSupport(body, signal)
-    if (!signal.aborted) { setResult(response); setDraft(null); setNotice('Рішення отримано із сервера.') }
+  const submitResolution = (requestMessage: string) => run('Перевірка звернення…', async (signal) => {
+    const response = await resolveSupport({ ...body, message: requestMessage }, signal)
+    if (signal.aborted) return
+    setResult(response)
+    if (response.status === 'needs_clarification' && response.clarificationQuestion) {
+      setClarificationContext(requestMessage)
+      setClarificationAnswer('')
+      setClarificationOpen(true)
+      return
+    }
+    setClarificationOpen(false)
+    setClarificationContext('')
+    setDraft(null)
+    setNotice('Рішення отримано із сервера.')
   })
+  const resolve = () => {
+    setResult(null)
+    setClarificationContext('')
+    return submitResolution(body.message)
+  }
+  const submitClarification = () => {
+    const answer = clarificationAnswer.trim()
+    if (!answer || !result?.clarificationQuestion) return
+    return submitResolution(`${clarificationContext}\n\nУточнення користувача: ${answer}`)
+  }
+  const closeClarification = () => {
+    setClarificationOpen(false)
+    setClarificationContext('')
+    setClarificationAnswer('')
+    setResult(null)
+  }
   const createDraft = () => run('Створення чернетки…', async (signal) => {
     const instruction = await createInstructionDraft({ ...body, resolution: solution.trim() }, signal)
     if (!signal.aborted) { setDraft(instruction); onInstruction(instruction); setNotice('Чернетку створено. Перевірте її перед погодженням.') }
@@ -129,6 +159,34 @@ function CaseWorkspace({ company, supportCase, instructions, tab, onInstruction 
   }
 
   return <section className="case-content" aria-label={tab}>
+    {clarificationOpen && result?.clarificationQuestion && <div className="clarification-backdrop" onKeyDown={(event) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeClarification(); return }
+      if (event.key === 'Tab') {
+        const dialog = event.currentTarget.querySelector<HTMLElement>('[role="dialog"]')
+        const controls = Array.from(dialog?.querySelectorAll<HTMLElement>('textarea:not([disabled]), button:not([disabled])') ?? [])
+        if (!controls.length) return
+        const first = controls[0]
+        const last = controls[controls.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+      }
+    }}>
+      <section className="clarification-dialog" role="dialog" aria-modal="true" aria-labelledby="clarification-title" aria-describedby="clarification-question">
+        <p className="eyebrow">Уточнення звернення</p>
+        <h2 id="clarification-title">Потрібно трохи більше інформації</h2>
+        <p id="clarification-question">{result.clarificationQuestion}</p>
+        <form onSubmit={(event) => { event.preventDefault(); void submitClarification() }}>
+          <label htmlFor="clarification-answer">Ваша відповідь</label>
+          <textarea id="clarification-answer" autoFocus required rows={4} maxLength={clarificationRemaining} value={clarificationAnswer} disabled={!!busy} onChange={(event) => setClarificationAnswer(event.target.value)} />
+          {clarificationRemaining === 0 && <p className="clarification-error" role="alert">Звернення досягло ліміту 4000 символів. Закрийте вікно та скоротіть його перед повторним надсиланням.</p>}
+          {error && <p className="clarification-error" role="alert">{error}</p>}
+          <div className="clarification-actions">
+            <button className="button secondary" type="button" disabled={!!busy} onClick={closeClarification}>Закрити</button>
+            <button className="button primary" type="submit" disabled={!!busy || !clarificationAnswer.trim() || clarificationRemaining === 0}>{busy || 'Продовжити'}</button>
+          </div>
+        </form>
+      </section>
+    </div>}
     <div className="operation-feedback" aria-live="polite" aria-atomic="true">{busy || notice}</div>
     {error && <div className="error-box" role="alert">{error}</div>}
     <div hidden={tab !== 'Звернення'} className="case-columns">

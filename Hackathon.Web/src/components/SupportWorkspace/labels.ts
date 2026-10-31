@@ -21,7 +21,7 @@ export function labelModelFailure(reason?: string) {
 
 export const statusLabels = {
   executed: 'Виконано', needs_approval: 'Очікує погодження',
-  blocked: 'Дію заблоковано', needs_instruction: 'Потрібна інструкція',
+  blocked: 'Дію заблоковано', needs_instruction: 'Потрібна інструкція', needs_clarification: 'Очікує уточнення',
 }
 
 const actionLabels: Record<string, string> = {

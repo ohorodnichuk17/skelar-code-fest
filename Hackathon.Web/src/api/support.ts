@@ -17,8 +17,9 @@ export interface CaseVerification {
 }
 export interface Resolution {
   id: string; companyId: string; caseId: string; instruction: Instruction | null
-  status: 'executed' | 'needs_approval' | 'blocked' | 'needs_instruction'
+  status: 'executed' | 'needs_approval' | 'blocked' | 'needs_instruction' | 'needs_clarification'
   source: Source; summary: string; reply: string
+  clarificationQuestion?: string | null
   modelFailure?: string
   dataAccess: { field: string; label: string; allowed: boolean; reason: string }[]
   timeline: { step: string; status: string; detail: string }[]
