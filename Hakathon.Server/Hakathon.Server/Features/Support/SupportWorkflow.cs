@@ -125,6 +125,11 @@ public sealed class SupportWorkflow(SupportStore store, GemmaService gemma, IOpt
                     // No model classification: a human may confirm only a deterministically matching complaint.
                     status = MessageMatches(request.CaseId, request.Message) ? "needs_approval" : "needs_instruction";
                 }
+                else if (matches && action == "refund_duplicate")
+                {
+                    // Гроші: агент готує повністю перевірене рішення, але фінальне слово за оператором.
+                    status = "needs_approval";
+                }
                 else if (matches)
                 {
                     Execute(state, action);
@@ -137,6 +142,7 @@ public sealed class SupportWorkflow(SupportStore store, GemmaService gemma, IOpt
                 "blocked" when verification.Status != "confirmed" => verification.Summary + " Операцій не виконано; за потреби уточніть обставини звернення.",
                 "blocked" => "Дію заблоковано: поточні дані або дозволи не відповідають умовам інструкції. Змін не виконано.",
                 "needs_approval" when action == "manual_review" => "Знайдено затверджену ручну процедуру. Потрібен фахівець; API не виконує її автоматично.",
+                "needs_approval" when valid && action == "refund_duplicate" => "Дубль підтверджено журналами, правила дозволяють повернення. Повернення коштів — рішення оператора: погодьте операцію.",
                 "needs_approval" => ModelFailureSummary(modelFailure) + " Дію не виконано; оператор має підтвердити її після перевірки звернення.",
                 _ => "Звернення не підтверджено як відповідне затвердженій процедурі. Дію не виконано; потрібна нова інструкція та рішення фахівця."
             };
@@ -307,20 +313,23 @@ public sealed class SupportWorkflow(SupportStore store, GemmaService gemma, IOpt
 
     private static (bool IsValid, bool NeedsClarification, string? Question) ParseClarification(JsonElement root)
     {
-        if (!root.TryGetProperty("needsClarification", out var decision) ||
-            decision.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
-            !root.TryGetProperty("clarificationQuestion", out var question))
+        // Поля уточнення необов'язкові: відсутність означає, що уточнення не потрібне.
+        if (!root.TryGetProperty("needsClarification", out var decision) || decision.ValueKind is JsonValueKind.Null)
+        {
+            return (true, false, null);
+        }
+        if (decision.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
         {
             return (false, false, null);
         }
 
         if (decision.GetBoolean())
         {
-            var text = question.ValueKind == JsonValueKind.String ? Text(root, "clarificationQuestion", 1000) : null;
+            var text = Text(root, "clarificationQuestion", 1000);
             return (text is not null, true, text);
         }
 
-        return question.ValueKind == JsonValueKind.Null ? (true, false, null) : (false, false, null);
+        return (true, false, null);
     }
 
     private SupportStore.Tenant FindTenant(string companyId, string? caseId = null)

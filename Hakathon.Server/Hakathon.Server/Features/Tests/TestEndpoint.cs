@@ -8,6 +8,12 @@ public class TestEndpoint(GemmaService gemmaService) : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
+        // Діагностичний проксі до Gemma: лише для локальної розробки, щоб не віддавати ключ назовні.
+        if (!app.ServiceProvider.GetRequiredService<IWebHostEnvironment>().IsDevelopment())
+        {
+            return;
+        }
+
         app.MapPost("/test",async(string prompt) =>
         {
             var result = await gemmaService.RequestAsync(prompt);
