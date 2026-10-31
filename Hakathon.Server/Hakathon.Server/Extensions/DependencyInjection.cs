@@ -44,6 +44,8 @@ public static class DependencyInjection
                 .AddHttpMessageHandler<GemmaDelegatingHandler>();
             services.AddScoped<TicketTriageService>();
             services.AddSingleton<FallbackTriageStore>();
+            services.AddSingleton<Hakathon.Server.Features.Support.SupportStore>();
+            services.AddScoped<Hakathon.Server.Features.Support.SupportWorkflow>();
             
             return services;
         }
