@@ -12,6 +12,11 @@ public class ExceptionHandlingMiddleware(ILogger<ExceptionHandlingMiddleware> lo
         {
             await next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            if (!context.Response.HasStarted)
+                context.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+        }
         catch (Exception exception)
         {
             logger.LogError(exception, "Unhandled exception: {Message}", exception.Message);
