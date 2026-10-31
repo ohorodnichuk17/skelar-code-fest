@@ -28,17 +28,19 @@ public static class DependencyInjection
             services.AddCarter();
             services.AddControllers().AddNewtonsoftJson();
             services.AddTransient<ExceptionHandlingMiddleware>();
-            services.Configure<GemmaOption>(opt =>
-            {
-                opt.API_Key = configuration["API_Key"]!;
-                opt.AI_Model = configuration["AI_Model"]!;
-            });
+            services.AddOptions<GemmaOption>()
+                .Configure(options => configuration.GetSection("Gemma").Bind(options))
+                .Validate(options => !string.IsNullOrWhiteSpace(options.API_Key), "Gemma API key is required. Set Gemma__API_Key.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.AI_Model), "Gemma model is required.")
+                .ValidateOnStart();
+            services.AddTransient<GemmaDelegatingHandler>();
             services.AddHttpClient<GemmaService>((provider, httpClient) =>
             {
                 var options = provider.GetRequiredService<IOptions<GemmaOption>>().Value;
 
                 httpClient.BaseAddress = new Uri($"https://generativelanguage.googleapis.com/v1beta/models/{options.AI_Model}:generateContent");
-            });
+            })
+                .AddHttpMessageHandler<GemmaDelegatingHandler>();
             
             return services;
         }
