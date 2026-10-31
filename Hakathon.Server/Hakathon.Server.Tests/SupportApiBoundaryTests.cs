@@ -219,7 +219,6 @@ public sealed class SupportApiBoundaryTests
     }
 
     [Theory]
-    [InlineData("duplicate_charge", "refund_duplicate", "active", "active")]
     [InlineData("service_inactive", "activate_service", "active", "active")]
     [InlineData("no_access", "restore_access", "active", "active")]
     public async Task ValidModelVerdict_ExecutesOnlyApprovedInstruction(string caseId, string action, string subscription, string access)

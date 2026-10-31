@@ -40,7 +40,6 @@ public sealed class SupportWorkflowTests
     }
 
     [Theory]
-    [InlineData("duplicate_charge", "refund_duplicate")]
     [InlineData("service_inactive", "activate_service")]
     [InlineData("no_access", "restore_access")]
     public async Task Valid_verdict_executes_the_permitted_demo_action_once(string caseId, string action)
@@ -62,6 +61,23 @@ public sealed class SupportWorkflowTests
         var repeat = await Read(await client.PostAsJsonAsync("/api/support/resolve", request));
         Assert.Equal("blocked", repeat.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/support/resolutions/{first.Id}/approve", new { companyId = "fitpulse" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Confirmed_refund_waits_for_operator_and_executes_once_after_approval()
+    {
+        using var factory = Factory(new ModelHandler(new { caseId = "duplicate_charge", action = "refund_duplicate", summary = "Перевірено", reply = "Перевірено" }));
+        var client = factory.CreateClient();
+        var request = new { companyId = "fitpulse", caseId = "duplicate_charge", message = await SeedMessage(client, "duplicate_charge") };
+        var proposed = await Read(await client.PostAsJsonAsync("/api/support/resolve", request));
+        Assert.Equal("needs_approval", proposed.Status);
+        Assert.Equal("gemma", proposed.Source);
+        Assert.DoesNotContain(proposed.State.Charges, c => c.Status == "refunded");
+
+        var approved = await Read(await client.PostAsJsonAsync($"/api/support/resolutions/{proposed.Id}/approve", new { companyId = "fitpulse" }));
+        Assert.Equal("executed", approved.Status);
+        Assert.Single(approved.State.Charges, c => c.Status == "refunded");
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/api/support/resolutions/{proposed.Id}/approve", new { companyId = "fitpulse" })).StatusCode);
     }
 
     [Fact]
@@ -294,11 +310,13 @@ public sealed class SupportWorkflowTests
         var request = new { companyId = "fitpulse", caseId = "duplicate_charge", message = "З мене двічі списали оплату за цей місяць." };
         var responses = await Task.WhenAll(client.PostAsJsonAsync("/api/support/resolve", request), client.PostAsJsonAsync("/api/support/resolve", request));
         var resolutions = await Task.WhenAll(responses.Select(Read));
-        Assert.Single(resolutions, r => r.Status == "executed");
-        Assert.Single(resolutions, r => r.Status == "blocked");
-        Assert.All(resolutions, r => Assert.Single(r.State.Charges, c => c.Status == "refunded"));
+        Assert.All(resolutions, r => Assert.Equal("needs_approval", r.Status));
+        var approvals = await Task.WhenAll(resolutions.Select(r => client.PostAsJsonAsync($"/api/support/resolutions/{r.Id}/approve", new { companyId = "fitpulse" })));
+        var executed = await Read(Assert.Single(approvals, a => a.IsSuccessStatusCode));
+        Assert.Single(executed.State.Charges, c => c.Status == "refunded");
         var other = await Read(await client.PostAsJsonAsync("/api/support/resolve", new { companyId = "studydesk", request.caseId, request.message }));
-        Assert.Equal("executed", other.Status);
+        Assert.Equal("needs_approval", other.Status);
+        Assert.DoesNotContain(other.State.Charges, c => c.Status == "refunded");
         Assert.All(other.State.Charges, c => Assert.StartsWith("studydesk-", c.Id));
     }
 

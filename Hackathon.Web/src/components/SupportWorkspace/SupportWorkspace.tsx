@@ -41,7 +41,6 @@ export function SupportWorkspace() {
     <a className="skip-link" href="#support-main">Перейти до робочого місця</a>
     <header className="support-topbar">
       <ResolverLogo />
-      <span className="demo-label">Демонстраційне середовище</span>
     </header>
     <main id="support-main" className="support-main">
       <section className="workspace-heading" aria-labelledby="support-title">
@@ -92,8 +91,24 @@ function CaseWorkspace({ company, supportCase, instructions, tab, onInstruction 
   const [clarificationOpen, setClarificationOpen] = useState(false)
   const [clarificationAnswer, setClarificationAnswer] = useState('')
   const [clarificationContext, setClarificationContext] = useState('')
+  const [evidence, setEvidence] = useState<{ name: string, url: string }[]>([])
   const requestRef = useRef<AbortController | null>(null)
+  const evidenceInputRef = useRef<HTMLInputElement | null>(null)
+  const evidenceRef = useRef(evidence)
+  useEffect(() => { evidenceRef.current = evidence }, [evidence])
   useEffect(() => () => requestRef.current?.abort(), [])
+  useEffect(() => () => evidenceRef.current.forEach((item) => URL.revokeObjectURL(item.url)), [])
+  // Імітація: скріншот лишається в браузері й не надсилається на сервер чи моделі.
+  const addEvidence = (files: FileList | null) => {
+    const images = Array.from(files ?? []).filter((file) => file.type.startsWith('image/'))
+    if (!images.length) return
+    setEvidence((current) => [...current, ...images.map((file) => ({ name: file.name, url: URL.createObjectURL(file) }))])
+    setNotice('Скріншот додано до звернення як доказ.')
+  }
+  const removeEvidence = (url: string) => {
+    URL.revokeObjectURL(url)
+    setEvidence((current) => current.filter((item) => item.url !== url))
+  }
   const body = { companyId: company.id, caseId: supportCase.id, message: message.trim() }
   const clarificationRemaining = Math.max(0, 4000 - clarificationContext.length - '\n\nУточнення користувача: '.length)
   const manualReview = result?.instruction?.action === 'manual_review'
@@ -196,6 +211,15 @@ function CaseWorkspace({ company, supportCase, instructions, tab, onInstruction 
           <label htmlFor="case-message">Повідомлення клієнта</label>
           <textarea id="case-message" name="message" autoComplete="off" rows={5} required maxLength={4000} value={message} disabled={!!busy} onChange={(e) => { setMessage(e.target.value); setResult(null); setDraft(null); setNotice(''); setError('') }} aria-describedby="message-help" />
           <p id="message-help" className="small muted">Можна відредагувати текст. Сервер фільтрує дані перед запитом до моделі.</p>
+          <div className="evidence-attach">
+            <input ref={evidenceInputRef} id="case-evidence" type="file" accept="image/*" multiple hidden onChange={(e) => { addEvidence(e.target.files); e.target.value = '' }} />
+            <button className="button secondary" type="button" disabled={!!busy} onClick={() => evidenceInputRef.current?.click()}>Додати скріншот<span aria-hidden="true">+</span></button>
+            {evidence.length > 0 && <ul className="evidence-list" aria-label="Додані докази">{evidence.map((item) => <li key={item.url}>
+              <img src={item.url} alt={`Скріншот ${item.name}`} />
+              <span><strong>{item.name}</strong><span className="small muted">Доказ від клієнта</span></span>
+              <button type="button" className="evidence-remove" aria-label={`Прибрати ${item.name}`} onClick={() => removeEvidence(item.url)}>×</button>
+            </li>)}</ul>}
+          </div>
           <button className="button primary" disabled={!!busy || !message.trim()} type="submit">{busy === 'Перевірка звернення…' ? busy : 'Перевірити та застосувати правила'}<span aria-hidden="true">↗</span></button>
         </form>
         <section className="selected-procedure" aria-label="Вибрана інструкція"><p className="eyebrow">Застосована процедура</p>
