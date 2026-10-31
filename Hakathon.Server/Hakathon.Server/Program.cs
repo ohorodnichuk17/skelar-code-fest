@@ -1,4 +1,5 @@
 using Carter;
+using Hakathon.Server.Database;
 using Hakathon.Server.Extensions;
 using Hakathon.Server.Middlewares;
 
@@ -14,6 +15,11 @@ builder.Services.AddAuth(builder.Configuration);
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<DatabaseContext>().Database.EnsureCreated();
+}
 
 app.UseCors("CustomCORS");
 app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -33,3 +39,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

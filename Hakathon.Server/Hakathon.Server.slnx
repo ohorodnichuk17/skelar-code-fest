@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="Hakathon.Server.Tests/Hakathon.Server.Tests.csproj" />
   <Project Path="Hakathon.Server/Hakathon.Server.csproj" />
 </Solution>

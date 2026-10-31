@@ -7,6 +7,7 @@ using Hakathon.Server.Options;
 using Hakathon.Server.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -41,6 +42,8 @@ public static class DependencyInjection
                 httpClient.BaseAddress = new Uri($"https://generativelanguage.googleapis.com/v1beta/models/{options.AI_Model}:generateContent");
             })
                 .AddHttpMessageHandler<GemmaDelegatingHandler>();
+            services.AddScoped<TicketTriageService>();
+            services.AddSingleton<FallbackTriageStore>();
             
             return services;
         }
@@ -59,13 +62,20 @@ public static class DependencyInjection
         }
         public IServiceCollection AddPersistence(IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
-            services.AddDbContext<DatabaseContext>();
+            var databaseName = configuration["InMemoryDbName"] ?? "resolver";
+            services.AddDbContext<DatabaseContext>(options => options.UseInMemoryDatabase(databaseName));
 
             return services;
         }
         public IServiceCollection AddAuth(IConfiguration configuration)
         {
+            if (string.IsNullOrWhiteSpace(configuration["Jwt:SigningKey"]))
+            {
+                services.AddAuthentication();
+                services.AddAuthorization();
+                return services;
+            }
+
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
