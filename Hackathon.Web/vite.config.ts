@@ -8,4 +8,10 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // Браузер ходить лише на наш бекенд; ключ Gemma ніколи не потрапляє на фронтенд.
+    proxy: {
+      '/api': 'http://localhost:5150',
+    },
+  },
 })

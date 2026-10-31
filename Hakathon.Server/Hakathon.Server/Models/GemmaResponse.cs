@@ -16,4 +16,6 @@ public sealed class Content
 public sealed class Part
 {
     public string? Text { get; set; }
+    // Gemma 4 повертає "роздуми" окремою частиною з thought = true — їх не показуємо й не парсимо.
+    public bool? Thought { get; set; }
 }
